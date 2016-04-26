@@ -235,20 +235,33 @@ public class SpecificData extends GenericData {
       Class c = (Class)type;
       String fullName = c.getName();
       Schema schema = names.get(fullName);
-      if (schema == null)
+      // check for SCHEMA$ method for scala interop
+      if (schema == null) {
+        try {
+          schema = (Schema)(c.getMethod("SCHEMA$").invoke(null));
+        } catch (java.lang.reflect.InvocationTargetException e) {
+        } catch (IllegalAccessException e) {
+        } catch (NoSuchMethodException e) {
+        }
+      }
+      // check for SCHEMA$ field for java interop
+      if (schema == null) {
         try {
           schema = (Schema)(c.getDeclaredField("SCHEMA$").get(null));
-
-          if (!fullName.equals(getClassName(schema)))
-            // HACK: schema mismatches class. maven shade plugin? try replacing.
-            schema = Schema.parse
-              (schema.toString().replace(schema.getNamespace(),
-                                         c.getPackage().getName()));
         } catch (NoSuchFieldException e) {
           throw new AvroRuntimeException("Not a Specific class: "+c);
         } catch (IllegalAccessException e) {
           throw new AvroRuntimeException(e);
         }
+      }
+
+      if (!fullName.equals(getClassName(schema))) {
+        // HACK: schema mismatches class. maven shade plugin? try replacing.
+        schema = Schema.parse
+          (schema.toString().replace(schema.getNamespace(),
+                                     c.getPackage().getName()));
+      }
+
       names.put(fullName, schema);
       return schema;
     }
